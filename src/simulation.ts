@@ -13,6 +13,8 @@ export class CitySimulation {
   readonly incidents:Incident[]=[];
   money=25000;
   reputation=72;
+  totalResolved=0;
+  totalFailed=0;
   day=1;
   minutes=8*60;
   elapsed=0;
@@ -74,6 +76,8 @@ export class CitySimulation {
         incident.severity=(incident.severity+1) as 2|3;
         this.events.unshift({message:'CALL #'+incident.id+' ESCALATING · SEVERITY INCREASED',tone:'warning'});
       }
+      if(incident.status==='WAITING'&&incident.age>95){this.fail(incident);continue;}
+      if(incident.status==='DISPATCHED'&&incident.age>150){this.fail(incident);continue;}
       if(incident.status==='ON_SCENE'){
         incident.handling+=step;
         if(incident.handling>=Math.max(8,22-incident.severity*4))this.resolve(incident);
@@ -97,12 +101,44 @@ export class CitySimulation {
   private resolve(incident:Incident):void {
     incident.status='RESOLVED';
     const reward=incident.severity*450;
-    this.money+=reward;this.reputation=Math.min(100,this.reputation+1);
+    this.totalResolved++;this.money+=reward;this.reputation=Math.min(100,this.reputation+1);
     const building=this.buildings.find(b=>b.id===incident.buildingId);
     if(building)building.condition=Math.min(100,building.condition+Math.max(2,10-incident.severity*2));
     const unit=this.units.find(u=>u.incidentId===incident.id);
     if(unit){unit.status='AVAILABLE';unit.incidentId=null;unit.x=unit.homeX;unit.z=unit.homeZ;}
     this.events.unshift({message:'CALL #'+incident.id+' RESOLVED · +$'+reward.toLocaleString(),tone:'success'});
+  }
+
+  private fail(incident:Incident):void {
+    incident.status='RESOLVED';this.totalFailed++;
+    const damage=incident.severity*13;
+    const building=this.buildings.find(b=>b.id===incident.buildingId);
+    if(building)building.condition=Math.max(0,building.condition-damage);
+    const penalty=incident.severity*650;
+    this.money=Math.max(0,this.money-penalty);
+    this.reputation=Math.max(0,this.reputation-incident.severity*4);
+    const unit=this.units.find(u=>u.incidentId===incident.id);
+    if(unit){unit.status='AVAILABLE';unit.incidentId=null;unit.x=unit.homeX;unit.z=unit.homeZ;}
+    this.events.unshift({message:'CALL #'+incident.id+' FAILED · DAMAGE AND COSTS INCURRED',tone:'warning'});
+    if(incident.kind==='ROAD COLLISION'&&this.incidents.filter(i=>i.status!=='RESOLVED').length<5){
+      this.spawn('MEDICAL EMERGENCY',Math.min(3,incident.severity) as 1|2|3);
+      this.events.unshift({message:'SECONDARY INCIDENT · INJURY REPORT',tone:'warning'});
+    }
+  }
+  get cityCondition():number {
+    const active=this.buildings.filter(b=>b.kind!=='STATION');
+    return Math.round(active.reduce((sum,b)=>sum+b.condition,0)/Math.max(1,active.length));
+  }
+  saveSnapshot():SaveSnapshot {
+    return {version:1,money:this.money,reputation:this.reputation,day:this.day,minutes:this.minutes,nextIncident:this.nextIncident,buildings:this.buildings.map(b=>({id:b.id,condition:b.condition})),incidents:this.incidents,units:this.units.map(u=>({id:u.id,x:u.x,z:u.z,status:u.status,incidentId:u.incidentId}))};
+  }
+  loadSnapshot(data:SaveSnapshot):void {
+    if(data.version!==1)return;
+    this.money=Math.max(0,data.money);this.reputation=Math.max(0,Math.min(100,data.reputation));
+    this.day=Math.max(1,data.day);this.minutes=data.minutes;this.nextIncident=Math.max(1,data.nextIncident);
+    for(const saved of data.buildings){const building=this.buildings.find(b=>b.id===saved.id);if(building)building.condition=Math.max(0,Math.min(100,saved.condition));}
+    this.incidents.splice(0,this.incidents.length,...data.incidents);
+    for(const saved of data.units){const unit=this.units.find(u=>u.id===saved.id);if(unit){unit.x=saved.x;unit.z=saved.z;unit.status=saved.status;unit.incidentId=saved.incidentId;}}
   }
   get activeIncidents():Incident[]{return this.incidents.filter(i=>i.status!=='RESOLVED');}
   get availableUnits():number{return this.units.filter(u=>u.status==='AVAILABLE').length;}
