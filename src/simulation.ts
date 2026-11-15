@@ -39,7 +39,7 @@ export class CitySimulation {
   private spawn(kind:IncidentKind,severity:1|2|3):void {
     const candidates=this.buildings.filter(b=>b.kind!=='STATION');
     const building=candidates[Math.floor(Math.random()*candidates.length)]!;
-    const service:Service=kind==='STRUCTURE FIRE'||kind==='VEHICLE FIRE'?'FIRE':kind==='ROAD COLLISION'?'POLICE':'MEDICAL';
+    const service:Service=kind==='STRUCTURE FIRE'||kind==='VEHICLE FIRE'?'FIRE':kind==='ROAD COLLISION'||kind==='PUBLIC DISTURBANCE'?'POLICE':'MEDICAL';
     const incident:Incident={id:this.nextIncident++,kind,service,buildingId:building.id,x:building.x,z:building.z,severity,status:'WAITING',age:0,responseTime:0,handling:0};
     this.incidents.unshift(incident);
     this.events.unshift({message:'NEW CALL · '+kind+' · '+building.district,tone:'warning'});
