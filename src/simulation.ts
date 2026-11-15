@@ -5,7 +5,7 @@ export type IncidentKind = 'STRUCTURE FIRE' | 'ROAD COLLISION' | 'MEDICAL EMERGE
 export interface CityBuilding { id:number; name:string; district:string; x:number; z:number; width:number; depth:number; floors:number; kind:string; condition:number; }
 export interface ResponseUnit { id:string; service:Service; name:string; x:number; z:number; homeX:number; homeZ:number; status:UnitStatus; incidentId:number|null; }
 export interface Incident { id:number; kind:IncidentKind; service:Service; buildingId:number; x:number; z:number; severity:1|2|3; status:IncidentStatus; age:number; responseTime:number; handling:number; }
-export interface SimulationEvent { message:string; tone:'info'|'warning'|'success'; }
+export interface SimulationEvent { message:string; tone:'info'|'warning'|'success'; }\nexport interface SaveSnapshot { version:number; money:number; reputation:number; day:number; minutes:number; nextIncident:number; buildings:{id:number;condition:number}[]; incidents:Incident[]; units:{id:string;x:number;z:number;status:UnitStatus;incidentId:number|null}[]; }
 export class CitySimulation {
   readonly buildings:CityBuilding[];
   readonly units:ResponseUnit[];
@@ -52,7 +52,7 @@ export class CitySimulation {
     const candidates=this.units.filter(u=>u.service===incident.service&&u.status==='AVAILABLE');
     if(!candidates.length){this.events.unshift({message:'NO AVAILABLE '+incident.service+' UNITS',tone:'warning'});return false;}
     const unit=candidates.sort((a,b)=>Math.hypot(a.x-incident.x,a.z-incident.z)-Math.hypot(b.x-incident.x,b.z-incident.z))[0]!;
-    unit.status='RESPONDING';unit.incidentId=incident.id;incident.status='DISPATCHED';
+    if(this.money<150){this.events.unshift({message:'INSUFFICIENT OPERATING FUNDS · DISPATCH BLOCKED',tone:'warning'});return false;}\n    this.money-=150;unit.status='RESPONDING';unit.incidentId=incident.id;incident.status='DISPATCHED';
     this.events.unshift({message:unit.name+' DISPATCHED TO CALL #'+incident.id,tone:'info'});
     return true;
   }
